@@ -1,0 +1,13 @@
+{
+    "name": "Tamagotchi.Tests",
+    "references": [
+        "Tamagotchi.Runtime",
+        "Unity.ugui"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ]
+}

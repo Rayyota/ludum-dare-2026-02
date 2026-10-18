@@ -1,0 +1,5 @@
+{
+    "name": "Tamagotchi.Editor",
+    "references": ["Tamagotchi.Runtime", "Unity.ugui", "Unity.InputSystem"],
+    "includePlatforms": ["Editor"]
+}

@@ -1,0 +1,7 @@
+{
+    "name": "Tamagotchi.Runtime",
+    "rootNamespace": "Tamagotchi",
+    "references": [
+        "Unity.ugui"
+    ]
+}
