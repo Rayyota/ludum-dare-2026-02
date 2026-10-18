@@ -2,7 +2,8 @@
     "name": "Tamagotchi.Tests",
     "references": [
         "Tamagotchi.Runtime",
-        "Unity.ugui"
+        "Unity.ugui",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [
         "Editor"

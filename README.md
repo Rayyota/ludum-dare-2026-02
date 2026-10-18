@@ -40,27 +40,44 @@ Buttons use size 24 and meter labels size 16.
 - The game opens the supplied start menu. Press Start to begin with empty needs.
   There is no automatic repair timer. Retry returns straight to gameplay.
 - Feed, Wash, and Play each restore 8 points to their corresponding need, capped
-  at 100. Satiety, Cleanliness, and Joy decrease by 3, 2, and 2.5 points per second,
+  at 100. Satiety, Cleanliness, and Joy decrease by 1.8, 1.2, and 1.5 points per second,
   including during repairs. They stop decreasing at zero and pause on game over.
-- Each completed care action increases Breakdown by 3 points (maximum 100).
+- Each completed care action increases Breakdown by 1.25 points (maximum 100).
   Breakdown is overall device wear and is not reset by repairing one button.
-- Each care button counts its own presses. At 0% Breakdown it breaks on the sixth
-  press; at 100% it breaks on the third. Intermediate limits are interpolated and
+- Each care button counts its own presses. At 0% Breakdown it breaks on the eighth
+  press; at 100% it breaks on the fourth. Intermediate limits are interpolated and
   checked using the current Breakdown on every press. Increasing wear can
   shorten the remaining life of a button that is already in use.
-- A breaking press opens the timing puzzle instead of immediately granting care.
-  Three hits repair the button, reset its counter, and complete the interrupted
-  action once. A miss or three-second stage timeout costs one heart, grants no
-  care, and leaves that button broken/red. Clicking it retries the repair.
-  Other buttons remain usable when home. Both outcomes return straight home.
+- Breaking presses draw from a shuffled set of timing, contacts, key holding, and cleaning.
+  Every four breakdowns include all four games, with no consecutive repeat at a set boundary.
+  Timing requires three hits; contact matching requires connecting all four plugs
+  before its twelve-second timer expires. Press the displayed two- or three-key combination together
+  within a five-second round for an immediate win. Combinations change on every
+  attempt and never require W and S together. The seven combinations (WA, WD,
+  AS, SD, AD, WAD, ASD) are shuffled without repeats within each cycle. For cleaning, rub the five dirt patches with the left
+  mouse button held within twelve seconds. A stationary click does not clean.
+  Success repairs the button and completes
+  the interrupted care action once. Failure costs one heart and leaves the
+  button broken. Clicking it retries with another random selection. Both outcomes
+  return straight home without a result dialog. Contact plugs reset on every run.
+- Win by filling Satiety, Cleanliness, and Joy to 100 simultaneously before time
+  runs out. A newly filled need holds at 100 for three seconds before decay
+  resumes, giving time to top up the other needs. The supplied GAME WIN screen
+  stops play and offers Retry. Breakdown is excluded from the victory condition.
+- The top-left session clock starts at 03:00 when Start is pressed and continues
+  through all minigames. Reaching 00:00 cancels the current repair and shows
+  Game Over. Retry resets the clock, hearts, needs, and button wear.
 - The repair modal contains only three progress dots, a track, a small time bar,
   and the **Контакт** button. Click the track or button on mouse down. The target
-  narrows to 46%, 28%, and 14% across the three stages.
+  narrows to 48%, 30%, and 18% across the three stages.
 - Losing all three hearts ends the game. Restart resets lives, needs, wear, and
   all button counters. Care is blocked during a repair and after game over.
 - Tune care amounts, per-action wear, and press limits on PetCareActions; need
   decay rates and starting values on PetStatus; timing difficulty on TimingMinigame.
-  Empty needs do not currently remove hearts. Progress is session-only.
+  After an initial ten-second grace period, keeping any need empty for ten
+  consecutive seconds costs one heart. Returning all three needs above zero
+  clears this countdown. Empty needs share one countdown, not three penalties.
+  Progress is session-only.
 
 TimingMinigame exposes RequestRepair, StartRepair, and Inspector result events
 for future care systems. Keep its Scene UI References assigned when editing the
@@ -82,3 +99,30 @@ reapplies this skin and its layout to the prefab.
 Run the Tamagotchi.Tests EditMode suite through **Window > General > Test Runner**.
 The editor utility **Tools > Tamagotchi > Rebuild Prototype UI Scene** recreates the
 initial scene and prefab; it overwrites their layout, so use it only deliberately.
+
+The supplied meow in `Assets/Audio/pet-meow.mp3` plays after completed care.
+The `Pet Voice` AudioSource controls its volume and avoids overlapping meows.
+The second supplied recording, `Assets/Audio/track-05.mp3`, loops quietly on the
+`Background Music` AudioSource.
+
+The screen character uses four transparent frames extracted from the supplied GIF
+in `Assets/Art/Tamagotchi/Character`. `PetSpriteAnimation` preserves its original
+100/100/300/100 ms timing. Edit `Pet/Screen/Character` to adjust its placement.
+
+The standalone `Assets/Scenes/Minigames/ContactMatching.unity` scene uses the
+supplied connector sprites and window frames in `Assets/Art/ContactMatching`.
+The timer uses Tiny5 Pixel. `Tools > Tamagotchi > Apply Contact Matching Sprites`
+reapplies the skin while keeping the contact and cable references.
+
+`Assets/Prefabs/Contact Matching UI.prefab` embeds the contact minigame inside the
+main UI, so needs and music continue during repairs. After editing the standalone
+contact scene, use `Tools > Tamagotchi > Integrate Contact Repairs` to update it.
+The session timer artwork is `Assets/Art/Tamagotchi/UI/session-timer.png`.
+
+`Assets/Art/AdditionalRepairs` contains unchanged PNGs from the supplied second
+sprite pack. The additional repair interfaces follow its reference screens.
+The pet also meows every 3–5 seconds during active play, without overlapping its
+own voice. Menus and Game Over stop the voice.
+
+The supplied `button-click.mp3` plays on active UI button presses through
+`ButtonClickSound`. Button visual transitions remain disabled.

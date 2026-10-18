@@ -79,6 +79,7 @@ public static class SpriteInterfaceSkin
         pet.enabled = true;
         pet.transform.Find("Placeholder").gameObject.SetActive(false);
         MapDeviceButtons(root);
+        PetCharacterSetup.Configure(root);
 
         var lives = home.Find("Lives") as RectTransform;
         Place(lives, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-32, -32), new Vector2(364, 104));
@@ -129,6 +130,7 @@ public static class SpriteInterfaceSkin
         }
 
         LayoutHome(root);
+        PetAudioSetup.Configure(root);
 
         var start = ChildImage(canvas, "StartScreen");
         Stretch(start.rectTransform);
@@ -163,6 +165,10 @@ public static class SpriteInterfaceSkin
         Set(config, "gameOverScreen", death.gameObject);
         Set(config, "startButton", startButton);
         config.ApplyModifiedPropertiesWithoutUndo();
+        ContactRepairIntegration.Configure(root);
+        AdditionalRepairSetup.Configure(root);
+        SessionTimerSetup.Configure(root);
+        VictoryScreenSetup.Configure(root);
     }
 
     [MenuItem("Tools/Tamagotchi/Apply Home Spacing")]
@@ -242,11 +248,7 @@ public static class SpriteInterfaceSkin
                 button.gameObject.AddComponent<CircularButtonHitArea>();
 
         }
-        var care = new SerializedObject(root.GetComponent<PetCareActions>());
-        var tint = care.FindProperty("brokenColor").colorValue;
-        tint.a = 0.4f;
-        care.FindProperty("brokenColor").colorValue = tint;
-        care.ApplyModifiedPropertiesWithoutUndo();
+
     }
 
     private static Sprite Sprite(string name)

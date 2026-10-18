@@ -41,16 +41,13 @@ public class DynamicCable : MonoBehaviour
 
         Vector2 direction = end - start;
 
-        // Кабель находится между двумя точками
         cable.anchoredPosition = (start + end) / 2f;
 
-        // Кабель растягивается
         cable.sizeDelta = new Vector2(
             direction.magnitude,
             thickness
         );
 
-        // Кабель поворачивается
         float angle = Mathf.Atan2(
             direction.y,
             direction.x

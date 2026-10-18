@@ -1,5 +1,12 @@
 {
     "name": "Tamagotchi.Editor",
-    "references": ["Tamagotchi.Runtime", "Unity.ugui", "Unity.InputSystem"],
-    "includePlatforms": ["Editor"]
+    "references": [
+        "Tamagotchi.Runtime",
+        "Unity.ugui",
+        "Unity.InputSystem",
+        "Unity.TextMeshPro"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ]
 }

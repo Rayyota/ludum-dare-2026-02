@@ -9,8 +9,9 @@ public class ContactMatchingGame : MonoBehaviour
     [SerializeField] private ContactDrag[] contacts;
 
     [Header("Таймер")]
-    [SerializeField] private float gameDuration = 20f;
+    [SerializeField] private float gameDuration = 12f;
     [SerializeField] private TMP_Text timerText;
+    [SerializeField] private Color timerColor = new Color32(80, 47, 40, 255);
 
     [Header("Результат")]
     [SerializeField] private GameObject resultPanel;
@@ -19,11 +20,13 @@ public class ContactMatchingGame : MonoBehaviour
     private Vector2[] initialSlots;
     private int connectedCount;
     private float remainingTime;
-    private bool gameEnded;
+    [SerializeField] private bool playOnStart = true;
+    [SerializeField] private bool showResultPanel = true;
+
+    private bool gameEnded = true;
 
     public bool IsGameEnded => gameEnded;
 
-    // Позже можно подключить к основной игре
     public event Action<bool> OnGameFinished;
 
     private void Awake()
@@ -34,28 +37,38 @@ public class ContactMatchingGame : MonoBehaviour
 
     private void Start()
     {
+        if (playOnStart && initialSlots == null) BeginGame();
+    }
+
+    public bool BeginGame()
+    {
         if (contacts == null || contacts.Length != 4)
         {
-            Debug.LogError("Нужно назначить 4 контакта!");
-            enabled = false;
-            return;
+            Debug.LogError("Нужно назначить 4 контакта!", this);
+            return false;
         }
-
-        initialSlots = new Vector2[4];
-
-        for (int i = 0; i < contacts.Length; i++)
+        if (initialSlots == null)
         {
-            if (contacts[i] == null)
+            initialSlots = new Vector2[contacts.Length];
+            for (int i = 0; i < contacts.Length; i++)
             {
-                Debug.LogError("Один из контактов не назначен!");
-                enabled = false;
-                return;
+                if (contacts[i] == null)
+                {
+                    initialSlots = null;
+                    Debug.LogError("Один из контактов не назначен!", this);
+                    return false;
+                }
+                initialSlots[i] = contacts[i].GetPosition();
             }
-
-            initialSlots[i] = contacts[i].GetPosition();
         }
-
         StartGame();
+        return true;
+    }
+
+    public void CancelGame()
+    {
+        gameEnded = true;
+        if (resultPanel != null) resultPanel.SetActive(false);
     }
 
     private void StartGame()
@@ -85,7 +98,6 @@ public class ContactMatchingGame : MonoBehaviour
         for (int i = 0; i < count; i++)
             order[i] = i;
 
-        // Алгоритм Фишера — Йетса
         for (int i = count - 1; i > 0; i--)
         {
             int j = UnityEngine.Random.Range(0, i + 1);
@@ -94,7 +106,6 @@ public class ContactMatchingGame : MonoBehaviour
                 (order[j], order[i]);
         }
 
-        // Исключаем исходный порядок
         bool unchanged = true;
 
         for (int i = 0; i < count; i++)
@@ -112,7 +123,6 @@ public class ContactMatchingGame : MonoBehaviour
                 (order[1], order[0]);
         }
 
-        // Переставляем штекеры по позициям
         for (int i = 0; i < count; i++)
         {
             contacts[i].Initialize(this);
@@ -155,7 +165,7 @@ public class ContactMatchingGame : MonoBehaviour
         timerText.color =
             remainingTime <= 5f
                 ? Color.red
-                : Color.white;
+                : timerColor;
     }
 
     public void ContactConnected()
@@ -192,7 +202,7 @@ public class ContactMatchingGame : MonoBehaviour
             resultText.text = message;
 
         if (resultPanel != null)
-            resultPanel.SetActive(true);
+            resultPanel.SetActive(showResultPanel);
 
         Debug.Log(victory
             ? "Мини-игра пройдена!"

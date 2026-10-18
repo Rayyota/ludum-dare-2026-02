@@ -30,7 +30,10 @@ namespace Tamagotchi.Tests
             Assert.That(Field<Sprite>(game, "healthyPetSprite"), Is.Not.Null);
             Assert.That(Field<Sprite>(game, "brokenPetSprite"), Is.Not.Null);
             foreach (var button in game.GetComponentsInChildren<Button>(true))
+            {
                 Assert.That(button.transition, Is.EqualTo(Selectable.Transition.None), button.name);
+                Assert.That(button.GetComponent<ButtonClickSound>(), Is.Not.Null, button.name);
+            }
             foreach (var heart in game.GetComponentsInChildren<HeartIcon>())
                 Assert.That(heart.GetComponent<CanvasRenderer>(), Is.Not.Null);
             foreach (var label in game.GetComponentsInChildren<Text>(true))
@@ -51,15 +54,15 @@ namespace Tamagotchi.Tests
             {
                 var status = host.AddComponent<PetStatus>();
                 status.ResetState();
-                for (int i = 0; i < 4; i++) status.SetValue((PetStat)i, 100);
+                for (int i = 0; i < 4; i++) status.SetValue((PetStat)i, i == 3 ? 100 : 90);
                 status.Tick(1);
-                Assert.That(status.GetValue(PetStat.Satiety), Is.EqualTo(97));
-                Assert.That(status.GetValue(PetStat.Cleanliness), Is.EqualTo(98));
-                Assert.That(status.GetValue(PetStat.Joy), Is.EqualTo(97.5f));
+                Assert.That(status.GetValue(PetStat.Satiety), Is.EqualTo(88.2f).Within(0.001f));
+                Assert.That(status.GetValue(PetStat.Cleanliness), Is.EqualTo(88.8f).Within(0.001f));
+                Assert.That(status.GetValue(PetStat.Joy), Is.EqualTo(88.5f).Within(0.001f));
                 Assert.That(status.GetValue(PetStat.Breakdown), Is.EqualTo(100));
                 status.SetDecayEnabled(false);
                 status.Tick(60);
-                Assert.That(status.GetValue(PetStat.Satiety), Is.EqualTo(97));
+                Assert.That(status.GetValue(PetStat.Satiety), Is.EqualTo(88.2f).Within(0.001f));
                 status.SetDecayEnabled(true);
                 status.Tick(100000);
                 for (int i = 0; i < 3; i++) Assert.That(status.GetValue((PetStat)i), Is.Zero);
@@ -128,6 +131,9 @@ namespace Tamagotchi.Tests
             EditorSceneManager.OpenScene(ScenePath);
             yield return new EnterPlayMode();
             var game = Object.FindFirstObjectByType<TimingMinigame>();
+            Set(game, "contactMatching", null);
+            Set(game, "keyHold", null);
+            Set(game, "boardCleaning", null);
             yield return null;
             Assert.That(Field<GameObject>(game, "startScreen").activeSelf, Is.True);
             Field<Button>(game, "startButton").onClick.Invoke();
@@ -148,16 +154,16 @@ namespace Tamagotchi.Tests
 
             feed.onClick.Invoke(); wash.onClick.Invoke(); play.onClick.Invoke();
             for (int i = 0; i < 3; i++) Assert.That(bars[i].value, Is.EqualTo(8));
-            Assert.That(bars[3].value, Is.EqualTo(9), "Completed care gradually increases wear.");
+            Assert.That(bars[3].value, Is.EqualTo(3.75f), "Completed care gradually increases wear.");
 
             game.ResetGame(); status.SetDecayEnabled(false);
             Set(care, "wearPerAction", 0f);
             wash.onClick.Invoke(); play.onClick.Invoke();
-            for (int i = 0; i < 5; i++) feed.onClick.Invoke();
+            for (int i = 0; i < 7; i++) feed.onClick.Invoke();
             Assert.That(Field<TimingRound>(game, "round"), Is.Null, "Each button has its own counter.");
-            Assert.That(status.GetValue(PetStat.Satiety), Is.EqualTo(40));
+            Assert.That(status.GetValue(PetStat.Satiety), Is.EqualTo(56));
             feed.onClick.Invoke();
-            Assert.That(Field<TimingRound>(game, "round"), Is.Not.Null, "Sixth healthy press breaks the button.");
+            Assert.That(Field<TimingRound>(game, "round"), Is.Not.Null, "Eighth healthy press breaks the button.");
             status.SetValue(PetStat.Satiety, 10);
             feed.onClick.Invoke();
             Assert.That(status.GetValue(PetStat.Satiety), Is.EqualTo(10), "No care during a repair.");
@@ -167,7 +173,7 @@ namespace Tamagotchi.Tests
             AssertLives(game, 3);
             Assert.That(Field<Image>(game, "petImage").sprite, Is.EqualTo(Field<Sprite>(game, "healthyPetSprite")));
 
-            for (int i = 0; i < 5; i++) feed.onClick.Invoke();
+            for (int i = 0; i < 7; i++) feed.onClick.Invoke();
             Assert.That(Field<TimingRound>(game, "round"), Is.Null, "Success resets the button counter.");
             feed.onClick.Invoke();
             status.SetValue(PetStat.Satiety, 10);
@@ -193,9 +199,9 @@ namespace Tamagotchi.Tests
             Assert.That(Field<TimingRound>(game, "round"), Is.Null);
             for (int i = 0; i < 4; i++) Assert.That(bars[i].value, Is.Zero);
 
-            feed.onClick.Invoke(); feed.onClick.Invoke();
+            feed.onClick.Invoke(); feed.onClick.Invoke(); feed.onClick.Invoke();
             status.SetValue(PetStat.Breakdown, 100);
-            Assert.That(care.CurrentPressLimit, Is.EqualTo(3));
+            Assert.That(care.CurrentPressLimit, Is.EqualTo(4));
             feed.onClick.Invoke();
             Assert.That(Field<TimingRound>(game, "round"), Is.Not.Null,
                 "Increasing wear shortens the limit even for an already used button.");
@@ -205,7 +211,7 @@ namespace Tamagotchi.Tests
             Assert.That(Field<GameObject>(game, "repairPanel").activeSelf, Is.False);
             feed.onClick.Invoke();
             Win(game);
-            Assert.That(status.GetValue(PetStat.Satiety), Is.EqualTo(24).Within(0.1));
+            Assert.That(status.GetValue(PetStat.Satiety), Is.EqualTo(32).Within(0.1));
             Assert.That(Field<GameObject>(game, "repairPanel").activeSelf, Is.False);
             LogAssert.NoUnexpectedReceived();
             yield return new ExitPlayMode();

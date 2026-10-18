@@ -13,9 +13,11 @@ namespace Tamagotchi
         [SerializeField, Range(0, 100)] private float startingBreakdown;
 
         [Header("Need loss per minute")]
-        [SerializeField, Min(0)] private float satietyLossPerMinute = 180;
-        [SerializeField, Min(0)] private float cleanlinessLossPerMinute = 120;
-        [SerializeField, Min(0)] private float joyLossPerMinute = 150;
+        [SerializeField, Min(0)] private float satietyLossPerMinute = 108;
+        [SerializeField, Min(0)] private float cleanlinessLossPerMinute = 72;
+        [SerializeField, Min(0)] private float joyLossPerMinute = 90;
+        [SerializeField, Min(0)] private float fullNeedHoldSeconds = 3;
+        private readonly float[] fullNeedHold = new float[3];
         private bool decayEnabled = true;
 
         private readonly float[] values = new float[4];
@@ -29,9 +31,17 @@ namespace Tamagotchi
         public void Tick(float seconds)
         {
             if (!decayEnabled || seconds <= 0) return;
-            SetValue(PetStat.Satiety, values[0] - Mathf.Max(0, satietyLossPerMinute) * seconds / 60f);
-            SetValue(PetStat.Cleanliness, values[1] - Mathf.Max(0, cleanlinessLossPerMinute) * seconds / 60f);
-            SetValue(PetStat.Joy, values[2] - Mathf.Max(0, joyLossPerMinute) * seconds / 60f);
+            Decay(0, satietyLossPerMinute, seconds);
+            Decay(1, cleanlinessLossPerMinute, seconds);
+            Decay(2, joyLossPerMinute, seconds);
+        }
+
+        private void Decay(int index, float lossPerMinute, float seconds)
+        {
+            float held = Mathf.Min(seconds, fullNeedHold[index]);
+            fullNeedHold[index] -= held;
+            if (seconds > held)
+                SetValue((PetStat)index, values[index] - Mathf.Max(0, lossPerMinute) * (seconds - held) / 60f);
         }
 
         public float GetValue(PetStat stat) => values[(int)stat];
@@ -43,11 +53,13 @@ namespace Tamagotchi
             value = Mathf.Clamp(value, 0, 100);
             if (Mathf.Approximately(values[(int)stat], value)) return;
             values[(int)stat] = value;
+            if ((int)stat < 3) fullNeedHold[(int)stat] = value >= 100 ? fullNeedHoldSeconds : 0;
             Changed?.Invoke();
         }
 
         public void ResetState()
         {
+            System.Array.Clear(fullNeedHold, 0, fullNeedHold.Length);
             values[0] = Mathf.Clamp(startingSatiety, 0, 100);
             values[1] = Mathf.Clamp(startingCleanliness, 0, 100);
             values[2] = Mathf.Clamp(startingJoy, 0, 100);

@@ -16,17 +16,20 @@ namespace Tamagotchi
         [SerializeField, Range(1, 100)] private float washAmount = 8;
         [SerializeField, Range(1, 100)] private float playAmount = 8;
 
+        [Header("Audio")]
+        [SerializeField] private AudioSource petVoice;
+
         [Header("Button wear")]
-        [SerializeField, Min(2)] private int pressesWhenHealthy = 6;
-        [SerializeField, Min(1)] private int pressesWhenWorn = 3;
-        [SerializeField, Range(0, 20)] private float wearPerAction = 3;
-        [SerializeField] private Color brokenColor = new Color32(204, 110, 94, 255);
+        [SerializeField, Min(2)] private int pressesWhenHealthy = 8;
+        [SerializeField, Min(1)] private int pressesWhenWorn = 4;
+        [SerializeField, Range(0, 20)] private float wearPerAction = 1.25f;
 
         private readonly int[] presses = new int[3];
         private readonly bool[] broken = new bool[3];
-        private Color[] normalColors;
         private int pendingAction = -1;
         private bool available = true;
+        private bool voiceActive;
+        private float meowDelay;
         private Button[] Buttons => new[] { feedButton, washButton, playButton };
         public bool HasBrokenButtons => System.Array.Exists(broken, value => value);
 
@@ -44,6 +47,28 @@ namespace Tamagotchi
             }
         }
 
+        public void SetVoiceActive(bool value)
+        {
+            if (voiceActive == value) return;
+            voiceActive = value;
+            meowDelay = Random.Range(3f, 5f);
+            if (!value && petVoice != null) petVoice.Stop();
+        }
+
+        private void Update()
+        {
+            if (!voiceActive || petVoice == null) return;
+            meowDelay -= Time.deltaTime;
+            if (meowDelay <= 0 && !petVoice.isPlaying) PlayMeow();
+        }
+
+        private void PlayMeow()
+        {
+            if (!voiceActive || petVoice == null || petVoice.isPlaying) return;
+            petVoice.Play();
+            meowDelay = Random.Range(3f, 5f);
+        }
+
         public void SetAvailable(bool value)
         {
             available = value;
@@ -53,18 +78,12 @@ namespace Tamagotchi
 
         public void ResetState()
         {
-            if (normalColors == null)
-            {
-                normalColors = new Color[3];
-                var buttons = Buttons;
-                for (int i = 0; i < 3; i++) normalColors[i] = buttons[i].targetGraphic.color;
-            }
+            if (petVoice != null) petVoice.Stop();
             pendingAction = -1;
             for (int i = 0; i < 3; i++)
             {
                 presses[i] = 0;
                 broken[i] = false;
-                Buttons[i].targetGraphic.color = normalColors[i];
             }
         }
 
@@ -76,7 +95,6 @@ namespace Tamagotchi
             if (!succeeded) return;
             broken[index] = false;
             presses[index] = 0;
-            Buttons[index].targetGraphic.color = normalColors[index];
             ApplyCare(index);
         }
 
@@ -92,7 +110,6 @@ namespace Tamagotchi
                     return;
                 }
                 broken[index] = true;
-                Buttons[index].targetGraphic.color = brokenColor;
             }
             pendingAction = index;
             repairGame.RequestRepair();
@@ -104,6 +121,7 @@ namespace Tamagotchi
             float amount = index == 0 ? feedAmount : index == 1 ? washAmount : playAmount;
             petStatus.SetValue(stat, petStatus.GetValue(stat) + Mathf.Clamp(amount, 0, 100));
             petStatus.SetValue(PetStat.Breakdown, petStatus.GetValue(PetStat.Breakdown) + Mathf.Max(0, wearPerAction));
+            PlayMeow();
         }
     }
 }

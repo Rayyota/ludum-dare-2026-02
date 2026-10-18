@@ -13,7 +13,7 @@ public class ContactDrag : MonoBehaviour,
     [SerializeField] private RectTransform plugSnapPoint;
 
     [Header("Настройки")]
-    [SerializeField] private float snapDistance = 70f;
+    [SerializeField] private float snapDistance = 32f;
 
     private RectTransform rect;
     private RectTransform parentRect;
@@ -45,6 +45,8 @@ public class ContactDrag : MonoBehaviour,
         connected = false;
         startPosition = position;
         rect.anchoredPosition = position;
+        var image = GetComponent<Image>();
+        if (image != null) image.raycastTarget = true;
     }
 
     public void OnBeginDrag(PointerEventData eventData)
@@ -85,8 +87,6 @@ public class ContactDrag : MonoBehaviour,
             return;
         }
 
-        // Обе точки переводим в координаты
-        // общего родителя подвижных контактов.
         Vector3 targetLocal =
             parentRect.InverseTransformPoint(
                 targetSnapPoint.position
@@ -104,7 +104,6 @@ public class ContactDrag : MonoBehaviour,
 
         if (distance <= snapDistance)
         {
-            // Совмещаем точку штекера с точкой разъёма
             Vector3 offset =
                 targetSnapPoint.position - plugSnapPoint.position;
 
@@ -120,7 +119,6 @@ public class ContactDrag : MonoBehaviour,
         }
         else
         {
-            // Неправильное соединение
             rect.anchoredPosition = startPosition;
         }
     }

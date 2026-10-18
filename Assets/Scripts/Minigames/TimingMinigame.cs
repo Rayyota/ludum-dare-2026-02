@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -7,12 +8,27 @@ namespace Tamagotchi.Minigames
     public sealed class TimingMinigame : MonoBehaviour
     {
         [Header("Timing puzzle")]
-        [SerializeField, Range(0.1f, 0.8f)] private float firstTargetWidth = 0.46f;
-        [SerializeField, Range(0.05f, 0.5f)] private float secondTargetWidth = 0.28f;
-        [SerializeField, Range(0.03f, 0.3f)] private float thirdTargetWidth = 0.14f;
-        [SerializeField, Min(0.1f)] private float cursorSpeed = 1f;
+        [SerializeField, Range(0.1f, 0.8f)] private float firstTargetWidth = 0.48f;
+        [SerializeField, Range(0.05f, 0.5f)] private float secondTargetWidth = 0.30f;
+        [SerializeField, Range(0.03f, 0.3f)] private float thirdTargetWidth = 0.18f;
+        [SerializeField, Min(0.1f)] private float cursorSpeed = 0.9f;
         [SerializeField, Min(1f)] private float secondsPerStage = 3f;
         [SerializeField, Min(0.1f)] private float hitFeedbackSeconds = 0.18f;
+
+        [Header("Repair selection")]
+        [SerializeField] private GameObject contactRepairPanel;
+        [SerializeField] private ContactMatchingGame contactMatching;
+        [SerializeField] private KeyHoldGame keyHold;
+        [SerializeField] private BoardCleaningGame boardCleaning;
+
+        [Header("Session timer")]
+        [SerializeField, Min(1)] private float sessionDuration = 180;
+        [SerializeField] private GameObject sessionTimerFrame;
+        [SerializeField] private Text sessionTimerText;
+
+        [Header("Empty needs")]
+        [SerializeField, Min(1)] private float neglectSeconds = 10;
+        [SerializeField, Min(0)] private float openingGraceSeconds = 10;
 
         [Header("Prototype loop")]
         [SerializeField, Min(1)] private int startingLives = 3;
@@ -41,10 +57,15 @@ namespace Tamagotchi.Minigames
         [SerializeField] private GameObject gameOverScreen;
         [SerializeField] private Button startButton;
 
+        [Header("Victory")]
+        [SerializeField] private GameObject winScreen;
+        [SerializeField] private Button winRetryButton;
+
         [Header("Integration hooks")]
         [SerializeField] private UnityEvent onRepairSucceeded = new UnityEvent();
         [SerializeField] private UnityEvent onRepairFailed = new UnityEvent();
         [SerializeField] private UnityEvent onGameOver = new UnityEvent();
+        [SerializeField] private UnityEvent onGameWon = new UnityEvent();
 
         private static readonly string[] StatNames = { "Сытость", "Чистота", "Радость", "Поломка" };
         private TimingRound round;
@@ -52,7 +73,15 @@ namespace Tamagotchi.Minigames
         private float feedbackRemaining;
         private bool resultShown;
         private bool started;
-        private bool HasRound => round != null;
+        private bool sessionWon;
+        private float sessionTimeRemaining;
+        private float neglectedFor;
+        private float openingGraceRemaining;
+        private bool contactRepairActive;
+        private RepairChallenge activeChallenge;
+        private readonly List<RepairKind> repairBag = new List<RepairKind>();
+        private RepairKind? lastRepair;
+        private bool HasRound => round != null || contactRepairActive || activeChallenge != null;
 
         private void Awake()
         {
@@ -68,8 +97,12 @@ namespace Tamagotchi.Minigames
                 return;
             }
             petStatus.Changed += RefreshStats;
+            if (contactMatching != null) contactMatching.OnGameFinished += OnContactRepairFinished;
+            if (keyHold != null) keyHold.OnGameFinished += OnChallengeFinished;
+            if (boardCleaning != null) boardCleaning.OnGameFinished += OnChallengeFinished;
             restartButton.onClick.AddListener(ResetGame);
             startButton.onClick.AddListener(ResetGame);
+            if (winRetryButton != null) winRetryButton.onClick.AddListener(ResetGame);
             petImage.enabled = petImage.sprite != null;
             placeholder.SetActive(petImage.sprite == null);
             ResetGame();
@@ -79,8 +112,11 @@ namespace Tamagotchi.Minigames
 
         private void Update()
         {
-            if (!started || lives <= 0) return;
-            if (HasRound)
+            if (!started || sessionWon || lives <= 0) return;
+            TickSession(Time.deltaTime);
+            TickNeedsRisk(Time.deltaTime);
+            if (lives <= 0) return;
+            if (round != null)
             {
                 if (round.State == TimingState.BetweenStages)
                 {
@@ -100,15 +136,118 @@ namespace Tamagotchi.Minigames
             }
         }
 
+        private void TickSession(float seconds)
+        {
+            if (!started || sessionWon || lives <= 0 || seconds <= 0) return;
+            sessionTimeRemaining = Mathf.Max(0, sessionTimeRemaining - seconds);
+            RefreshSessionTimer();
+            if (sessionTimeRemaining > 0) return;
+            lives = 0;
+            resultShown = true;
+            HideRepairs();
+            RefreshHome();
+            onGameOver.Invoke();
+        }
+
+        private void TickNeedsRisk(float seconds)
+        {
+            if (!started || sessionWon || lives <= 0 || seconds <= 0) return;
+            float grace = Mathf.Min(openingGraceRemaining, seconds);
+            openingGraceRemaining -= grace;
+            seconds -= grace;
+            if (seconds <= 0) return;
+            bool empty = petStatus.GetValue(PetStat.Satiety) <= 0 ||
+                petStatus.GetValue(PetStat.Cleanliness) <= 0 || petStatus.GetValue(PetStat.Joy) <= 0;
+            if (!empty) { neglectedFor = 0; return; }
+            neglectedFor += seconds;
+            if (neglectedFor < neglectSeconds) return;
+            neglectedFor = 0;
+            lives = Mathf.Max(0, lives - 1);
+            if (lives == 0)
+            {
+                resultShown = true;
+                HideRepairs();
+            }
+            RefreshHome();
+            if (lives == 0) onGameOver.Invoke();
+        }
+
+        private void RefreshSessionTimer()
+        {
+            if (sessionTimerText == null) return;
+            int seconds = Mathf.CeilToInt(sessionTimeRemaining);
+            sessionTimerText.text = $"{seconds / 60:00}:{seconds % 60:00}";
+        }
+
         public void RequestRepair()
         {
-            if (!started || lives <= 0 || HasRound) return;
+            if (!enabled || !started || sessionWon || lives <= 0 || HasRound) return;
+            var kind = DrawRepair();
+            if (kind == RepairKind.Keys || kind == RepairKind.Cleaning)
+            {
+                activeChallenge = kind == RepairKind.Keys ? (RepairChallenge)keyHold : boardCleaning;
+                resultShown = false;
+                activeChallenge.gameObject.SetActive(true);
+                RefreshHome();
+                activeChallenge.BeginGame();
+                return;
+            }
+            if (kind == RepairKind.Contacts)
+            {
+                contactRepairActive = true;
+                resultShown = false;
+                contactRepairPanel.SetActive(true);
+                RefreshHome();
+                if (contactMatching.BeginGame()) return;
+                contactRepairActive = false;
+                contactRepairPanel.SetActive(false);
+            }
             StartRepair();
+        }
+
+        private RepairKind DrawRepair()
+        {
+            if (repairBag.Count == 0)
+            {
+                repairBag.Add(RepairKind.Timing);
+                if (contactMatching != null && contactRepairPanel != null) repairBag.Add(RepairKind.Contacts);
+                if (keyHold != null) repairBag.Add(RepairKind.Keys);
+                if (boardCleaning != null) repairBag.Add(RepairKind.Cleaning);
+                for (int i = repairBag.Count - 1; i > 0; i--)
+                {
+                    int index = Random.Range(0, i + 1);
+                    (repairBag[i], repairBag[index]) = (repairBag[index], repairBag[i]);
+                }
+                if (repairBag.Count > 1 && repairBag[repairBag.Count - 1] == lastRepair)
+                    (repairBag[0], repairBag[repairBag.Count - 1]) = (repairBag[repairBag.Count - 1], repairBag[0]);
+            }
+            int last = repairBag.Count - 1;
+            var kind = repairBag[last];
+            repairBag.RemoveAt(last);
+            lastRepair = kind;
+            return kind;
+        }
+
+        private void HideRepairs()
+        {
+            round = null;
+            contactRepairActive = false;
+            activeChallenge = null;
+            if (contactMatching != null) contactMatching.CancelGame();
+            if (contactRepairPanel != null) contactRepairPanel.SetActive(false);
+            if (keyHold != null) { keyHold.CancelGame(); keyHold.gameObject.SetActive(false); }
+            if (boardCleaning != null) { boardCleaning.CancelGame(); boardCleaning.gameObject.SetActive(false); }
+            repairPanel.SetActive(false);
+        }
+
+        private void OnChallengeFinished(bool won)
+        {
+            if (activeChallenge != null) FinishRepair(won);
         }
 
         public void StartRepair()
         {
-            if (!enabled || !started || lives <= 0 || HasRound) return;
+            if (!enabled || !started || sessionWon || lives <= 0 || HasRound) return;
             round = new TimingRound(new[]
             {
                 Mathf.Clamp(firstTargetWidth, 0.03f, 0.95f),
@@ -125,7 +264,7 @@ namespace Tamagotchi.Minigames
 
         public void AttemptHit()
         {
-            if (!HasRound || round.State != TimingState.Playing) return;
+            if (round == null || round.State != TimingState.Playing) return;
             round.Hit();
             if (round.State == TimingState.BetweenStages)
             {
@@ -138,12 +277,20 @@ namespace Tamagotchi.Minigames
 
         private void FinishRepair()
         {
+            if (round != null) FinishRepair(round.State == TimingState.Won);
+        }
+
+        private void OnContactRepairFinished(bool won)
+        {
+            if (contactRepairActive) FinishRepair(won);
+        }
+
+        private void FinishRepair(bool won)
+        {
             if (resultShown) return;
             resultShown = true;
-            bool won = round.State == TimingState.Won;
             if (!won) lives = Mathf.Max(0, lives - 1);
-            round = null;
-            repairPanel.SetActive(false);
+            HideRepairs();
             careActions.CompleteRepair(won);
             RefreshHome();
             if (won) onRepairSucceeded.Invoke();
@@ -154,6 +301,14 @@ namespace Tamagotchi.Minigames
         public void ResetGame()
         {
             started = true;
+            sessionWon = false;
+            sessionTimeRemaining = Mathf.Max(1, sessionDuration);
+            neglectedFor = 0;
+            openingGraceRemaining = Mathf.Max(0, openingGraceSeconds);
+            RefreshSessionTimer();
+            HideRepairs();
+            repairBag.Clear();
+            lastRepair = null;
             careActions.ResetState();
             petStatus.ResetState();
             lives = Mathf.Clamp(startingLives, 1, hearts.Length);
@@ -186,14 +341,26 @@ namespace Tamagotchi.Minigames
                 statBars[i].value = value;
                 statLabels[i].text = $"{StatNames[i]} {value:0}%";
             }
+            if (started && !sessionWon && lives > 0 && petStatus.GetValue(PetStat.Satiety) >= 100 &&
+                petStatus.GetValue(PetStat.Cleanliness) >= 100 && petStatus.GetValue(PetStat.Joy) >= 100)
+            {
+                sessionWon = true;
+                resultShown = true;
+                HideRepairs();
+                RefreshHome();
+                onGameWon.Invoke();
+            }
         }
 
         private void RefreshHome()
         {
             startScreen.SetActive(!started);
+            if (winScreen != null) winScreen.SetActive(started && sessionWon);
+            if (sessionTimerFrame != null) sessionTimerFrame.SetActive(started && !sessionWon && lives > 0);
             gameOverScreen.SetActive(started && lives <= 0);
-            petStatus.SetDecayEnabled(started && lives > 0);
-            careActions.SetAvailable(started && lives > 0 && !HasRound);
+            petStatus.SetDecayEnabled(started && !sessionWon && lives > 0);
+            careActions.SetVoiceActive(started && !sessionWon && lives > 0);
+            careActions.SetAvailable(started && !sessionWon && lives > 0 && !HasRound);
             if (healthyPetSprite != null)
                 petImage.sprite = (careActions.HasBrokenButtons || lives <= 0) && brokenPetSprite != null ? brokenPetSprite : healthyPetSprite;
             for (int i = 0; i < hearts.Length; i++) hearts[i].Filled = i < lives;
@@ -205,8 +372,12 @@ namespace Tamagotchi.Minigames
         private void OnDestroy()
         {
             if (petStatus != null) petStatus.Changed -= RefreshStats;
+            if (contactMatching != null) contactMatching.OnGameFinished -= OnContactRepairFinished;
+            if (keyHold != null) keyHold.OnGameFinished -= OnChallengeFinished;
+            if (boardCleaning != null) boardCleaning.OnGameFinished -= OnChallengeFinished;
             if (restartButton != null) restartButton.onClick.RemoveListener(ResetGame);
             if (startButton != null) startButton.onClick.RemoveListener(ResetGame);
+            if (winRetryButton != null) winRetryButton.onClick.RemoveListener(ResetGame);
         }
     }
 }
